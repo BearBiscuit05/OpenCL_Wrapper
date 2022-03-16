@@ -1,4 +1,5 @@
 #include <iostream>
+#include "OclUtils.h"
 //point device and run kernel with some args
 //example : OclUtils.device.runFunction(kernelName,args);
 //
@@ -9,6 +10,6 @@
  *
  */
 int main() {
-    std::cout << "Hello, World!" << std::endl;
+    OclUtils utils;
     return 0;
 }

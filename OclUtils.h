@@ -15,7 +15,7 @@
 class OclDevice {
 public:
     void GetDeviceInfo(std::string Dname = "");
-
+    
     std::string DeviceName;
     cl_device_id DeviceId;
     std::vector<cl_kernel> kernels;
@@ -30,8 +30,7 @@ public:
 
     void GetPlatfromInfo(std::string Pname = "");
     cl_ulong getStartEndTime(cl_event event);
-    void noPtrCheck(void* ptr, std::string errMsg);
-    static void CheckError(cl_int iStatus, std::string errMsg);
+
 
     cl_platform_id platform = nullptr;
 };

@@ -6,13 +6,42 @@
 
 void PrintError(cl_int error);
 
+void CheckError(cl_int iStatus, std::string errMsg) {
+  if (CL_SUCCESS != iStatus) {
+        std::cout << errMsg << std::endl;
+        PrintError(iStatus);
+		exit(1);
+	}
+}
+
+void noPtrCheck(void *ptr, std::string errMsg) {
+
+}
 
 void OclDevice::GetDeviceInfo(std::string Dname) {
 
 }
 
-OclUtils::OclUtils() {
+std::string getPlatformName(cl_platform_id pid) {
+  cl_int status;char *value;  size_t sz;
+  status = clGetPlatformInfo(pid, CL_PLATFORM_NAME, 0, NULL, &sz);
+  CheckError(status, "Query for platform name size failed");
+  value = (char*) malloc(sz);
+  status = clGetPlatformInfo(pid, CL_PLATFORM_NAME, sz, value, NULL);
+  CheckError(status, "Query for platform name failed");
+  return value;
+}
 
+OclUtils::OclUtils(std::string Pname = "") {
+  cl_int iStatus = 0;
+  cl_uint num;
+  cl_uint	uiNumPlatforms = 0;
+  CheckError(clGetPlatformIDs(0, nullptr, &uiNumPlatforms), "Getting platforms error");
+  auto* pPlatforms = (cl_platform_id*)malloc(uiNumPlatforms * sizeof(cl_platform_id));
+  iStatus = clGetPlatformIDs(uiNumPlatforms, pPlatforms, nullptr);
+  this->platform = pPlatforms[0]; // choice paltfrom
+  std::cout<< getPlatformName(platform)<<std::endl;
+  free(pPlatforms);
 }
 
 
@@ -27,13 +56,7 @@ cl_ulong OclUtils::getStartEndTime(cl_event event) {
     return end - start;
 }
 
-void OclUtils::CheckError(cl_int iStatus, std::string errMsg) {
 
-}
-
-void OclUtils::noPtrCheck(void *ptr, std::string errMsg) {
-
-}
 
 
 void PrintError(cl_int error) {
