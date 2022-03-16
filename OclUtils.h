@@ -11,23 +11,48 @@
 #include <unordered_map>
 //                  -> args
 // device -> kernels
+class OclKernel;
 
 class OclDevice {
 public:
     void GetDeviceInfo(std::string Dname = "");
-    
-    std::string DeviceName;
-    cl_device_id DeviceId;
-    std::vector<cl_kernel> kernels;
-    std::vector<std::vector<cl_mem>> clMem;
+    void SetContext();
+    void SetQueue();
+    void CreateProgramWithSource(std::string filePath);
+    int SetKernel(std::string kernelName);
+
+    std::string deviceName = "";
+    cl_device_id deviceId = nullptr;
+    cl_command_queue queue = nullptr;
+    cl_context context = nullptr;
+    cl_program program = nullptr;
+    std::vector<OclKernel> kernelLists;
     std::unordered_map<std::string, int> nameMapKernel;
+};
+
+class OclKernel {
+public:
+    void SetKernelArgs();
+    void WriteData();
+    void Run();
+    void ReadData();
+
+    cl_kernel kernel;
+    cl_device_id deviceId;
+    std::string kernelName = "";
+
+    int dim = 0;
+    std::vector<int> globalSize;
+    std::vector<int> localSize;
+    std::vector<cl_mem> clMemLists;
 };
 
 class OclUtils {
 public:
     // TODO : init platform detect
     OclUtils(std::string Pname = "");
-
+    void ShowAllDevice();
+    void ShowDeviceInfo(cl_device_id Did);
     void GetPlatfromInfo(std::string Pname = "");
     cl_ulong getStartEndTime(cl_event event);
 

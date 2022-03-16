@@ -11,5 +11,6 @@
  */
 int main() {
     OclUtils utils;
+    utils.ShowAllDevice();
     return 0;
 }

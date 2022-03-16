@@ -6,7 +6,7 @@
 
 void PrintError(cl_int error);
 
-void CheckError(cl_int iStatus, std::string errMsg) {
+inline void CheckError(cl_int iStatus, std::string errMsg) {
   if (CL_SUCCESS != iStatus) {
         std::cout << errMsg << std::endl;
         PrintError(iStatus);
@@ -14,12 +14,70 @@ void CheckError(cl_int iStatus, std::string errMsg) {
 	}
 }
 
-void noPtrCheck(void *ptr, std::string errMsg) {
+inline void noPtrCheck(void *ptr, std::string errMsg) {
+    if (NULL == ptr) {
+        std::cout << "error: " << errMsg << std::endl;
+        exit(0);
+    }
+}
 
+std::string load_program(const char* filename)
+{
+    size_t	program_size[1];
+    FILE* program_handle = fopen(filename, "rb");
+    if (program_handle == nullptr)
+        perror("Error opening file\n");
+
+    fseek(program_handle, 0, SEEK_END);
+    program_size[0] = ftell(program_handle);
+    std::fstream kernelFile(filename);
+    std::string content(
+            (std::istreambuf_iterator<char>(kernelFile)),
+            std::istreambuf_iterator<char>()
+    );
+    return content;
 }
 
 void OclDevice::GetDeviceInfo(std::string Dname) {
 
+}
+
+void OclDevice::SetContext() {
+    context = clCreateContext(NULL, 1, &deviceId, NULL, NULL, NULL);
+    noPtrCheck(this->context, "Can not create context");
+}
+
+void OclDevice::SetQueue() {
+    queue = clCreateCommandQueue(context, deviceId, CL_QUEUE_PROFILING_ENABLE, NULL);
+    noPtrCheck(queue, "Can not create CommandQueue");
+}
+
+void OclDevice::CreateProgramWithSource(std::string filePath) {
+    std::string content = load_program(filePath.c_str());
+    const char* kernelCharArray = new char[content.size()];
+    kernelCharArray = content.c_str();
+    program = clCreateProgramWithSource(context, 1, &kernelCharArray, NULL, NULL);
+    noPtrCheck(program, "Can not create program");
+
+    cl_int iStatus = 0;
+    iStatus = clBuildProgram(this->program, 1, &deviceId, NULL, NULL, NULL);
+    if (CL_SUCCESS != iStatus)
+    {
+        std::cout << "Error: Can not build program" << std::endl;
+        char szBuildLog[16384];
+        clGetProgramBuildInfo(this->program, deviceId, CL_PROGRAM_BUILD_LOG, sizeof(szBuildLog), szBuildLog, NULL);
+        std::cout << "Error in Kernel: " << std::endl << szBuildLog;
+        exit(0);
+    }
+}
+
+int OclDevice::SetKernel(std::string kernelName) {
+    OclKernel k;
+    kernelLists.push_back(k);
+    nameMapKernel[kernelName] = kernelLists.size()-1;
+    k.kernel = clCreateKernel(program, kernelName.c_str(), nullptr);
+    noPtrCheck(k.kernel, "Can not create kernel :" + kernelName);
+    return nameMapKernel[kernelName];
 }
 
 std::string getPlatformName(cl_platform_id pid) {
@@ -32,19 +90,66 @@ std::string getPlatformName(cl_platform_id pid) {
   return value;
 }
 
-OclUtils::OclUtils(std::string Pname = "") {
+OclUtils::OclUtils(std::string Pname) {
   cl_int iStatus = 0;
   cl_uint num;
-  cl_uint	uiNumPlatforms = 0;
-  CheckError(clGetPlatformIDs(0, nullptr, &uiNumPlatforms), "Getting platforms error");
-  auto* pPlatforms = (cl_platform_id*)malloc(uiNumPlatforms * sizeof(cl_platform_id));
-  iStatus = clGetPlatformIDs(uiNumPlatforms, pPlatforms, nullptr);
+  cl_uint uiNumPlatforms = 0;
+  CheckError(clGetPlatformIDs(0, nullptr, &uiNumPlatforms),
+             "Getting platforms error");
+  std::vector<cl_platform_id> pPlatforms(uiNumPlatforms, nullptr);
+  CheckError(clGetPlatformIDs(uiNumPlatforms, pPlatforms.data(), nullptr),
+             "FATAL : fail to get platfrom Info");
   this->platform = pPlatforms[0]; // choice paltfrom
-  std::cout<< getPlatformName(platform)<<std::endl;
-  free(pPlatforms);
+  std::cout<< "Find platfrom : "<<getPlatformName(platform)<<std::endl;
 }
 
+void OclUtils::ShowAllDevice() {
+    cl_int iStatus = 0;
+    cl_uint	uiNumDevices = 0;
+    iStatus = clGetDeviceIDs(this->platform, CL_DEVICE_TYPE_ALL, 0, nullptr, &uiNumDevices);
+    std::vector<cl_device_id> devices(uiNumDevices, nullptr);
+    iStatus = clGetDeviceIDs(this->platform, CL_DEVICE_TYPE_ALL, uiNumDevices, devices.data(), nullptr);
+    for(auto & d : devices) {
+        ShowDeviceInfo(d);
+    }
+}
 
+void OclUtils::ShowDeviceInfo(cl_device_id Did) {
+    char* value;
+    size_t      valueSize;
+    size_t      maxWorkItemPerGroup;
+    cl_uint     maxComputeUnits = 0;
+    cl_ulong    maxGlobalMemSize = 0;
+    cl_ulong    maxConstantBufferSize = 0;
+    cl_ulong    maxLocalMemSize = 0;
+    ///print the device name
+    clGetDeviceInfo(Did, CL_DEVICE_NAME, 0, NULL, &valueSize);
+    value = (char*)malloc(valueSize);
+    clGetDeviceInfo(Did, CL_DEVICE_NAME, valueSize, value, NULL);
+    std::cout << "=======================================" << std::endl;
+    printf("Device Name: %s\n", value);
+    free(value);
+
+    /// print parallel compute units(CU)
+    clGetDeviceInfo(Did, CL_DEVICE_MAX_COMPUTE_UNITS, sizeof(maxComputeUnits), &maxComputeUnits, NULL);
+    printf("Parallel compute units: %u\n", maxComputeUnits);
+
+    clGetDeviceInfo(Did, CL_DEVICE_MAX_WORK_GROUP_SIZE, sizeof(maxWorkItemPerGroup), &maxWorkItemPerGroup, NULL);
+    printf("maxWorkItemPerGroup: %zd\n", maxWorkItemPerGroup);
+
+    /// print maxGlobalMemSize
+    clGetDeviceInfo(Did, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(maxGlobalMemSize), &maxGlobalMemSize, NULL);
+    printf("maxGlobalMemSize: %lu(MB)\n", maxGlobalMemSize / 1024 / 1024);
+
+    /// print maxConstantBufferSize
+    clGetDeviceInfo(Did, CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE, sizeof(maxConstantBufferSize), &maxConstantBufferSize, NULL);
+    printf("maxConstantBufferSize: %lu(KB)\n", maxConstantBufferSize / 1024);
+
+    /// print maxLocalMemSize
+    clGetDeviceInfo(Did, CL_DEVICE_LOCAL_MEM_SIZE, sizeof(maxLocalMemSize), &maxLocalMemSize, NULL);
+    printf("maxLocalMemSize: %lu(KB)\n", maxLocalMemSize / 1024);
+    std::cout << "=======================================" << std::endl;
+}
 
 cl_ulong OclUtils::getStartEndTime(cl_event event) {
     cl_int status;
@@ -55,9 +160,6 @@ cl_ulong OclUtils::getStartEndTime(cl_event event) {
     CheckError(status, "Failed to query event end time");
     return end - start;
 }
-
-
-
 
 void PrintError(cl_int error) {
     switch(error)
